@@ -47,9 +47,10 @@ export function buildChain(n: number, genesis = GENESIS) {
       base: 180 * i,
       discount: 0,
       fee: 18 * i,
-      to_stakers: 9 * i,
-      to_sponsor: 7 * i,
-      to_treasury: 2 * i,
+      // Legacy column, 0 on current records. The fee splits between the sponsor (80% in this data) and the treasury.
+      to_stakers: 0,
+      to_sponsor: Math.floor((18 * i * 8000) / 10_000),
+      to_treasury: 18 * i - Math.floor((18 * i * 8000) / 10_000),
       capacity_id: "cap_1",
       priority: 0,
       epoch: 500000,

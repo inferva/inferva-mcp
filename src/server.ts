@@ -10,12 +10,12 @@ export type ServerOptions = { client?: InfervaClient; log?: (msg: string) => voi
 const HINTS: Record<string, string> = {
   missing_api_key: "Set INFERVA_API_KEY to an agent key (inf_sk_...). Create one in the app under Endpoint & keys.",
   invalid_api_key: "The agent key is unknown or revoked. Create a new one in the app under Endpoint & keys.",
-  insufficient_funds: "The key owner's USDC balance does not cover this request.",
+  insufficient_funds: "The key owner's USDG balance does not cover this request.",
   spend_cap_reached: "This key reached its monthly spend cap. Raise it in the app or wait for the reset.",
   model_not_allowed: "This key is restricted to certain models. Use one it allows, or \"auto\".",
   model_not_found: "No active provider serves that model. Call list_models.",
-  rate_limit_exceeded: "Per-minute rate limit for the key owner's stake tier. Wait, or stake more INFER.",
-  congestion_deferred: "The network is congested and lower tiers are deferred first. Retry shortly.",
+  rate_limit_exceeded: "Per-minute rate limit per account (the same for everyone). Wait a minute and retry.",
+  congestion_deferred: "The network is at capacity and the request was deferred. Retry shortly.",
   capacity_exhausted: "No sponsored capacity has room for this request right now.",
   provider_error: "The provider could not complete the request. Nothing was charged.",
   settlement_busy: "Settlement was busy. Retry.",
@@ -52,7 +52,7 @@ export function createInfervaServer(opts: ServerOptions = {}): McpServer {
     { name: "inferva", version: VERSION },
     {
       instructions:
-        "INFERVA is one inference endpoint AI agents pay through. `chat` sends a paid completion (needs INFERVA_API_KEY) and returns the reply with its USDC cost, fee split and receipt. Every other tool is a free public read: models, network stats, protocol parameters, the settlement log (with local hash-chain verification), providers, governance, epochs and the capacity market.",
+        "INFERVA is one inference endpoint AI agents pay through. `chat` sends a paid completion (needs INFERVA_API_KEY) and returns the reply with its USDG cost, fee split and receipt. Every other tool is a free public read: models, network stats, protocol parameters, the settlement log (with local hash-chain verification), providers, governance, epochs and the capacity market.",
     },
   );
 

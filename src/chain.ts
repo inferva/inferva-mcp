@@ -9,6 +9,7 @@ export type SettlementRecord = {
   model: string;
   tokens: number;
   base: number;
+  /** Always 0 on current records; kept in the hash so older records still verify. */
   discount: number;
   fee: number;
   capacity_id: string;

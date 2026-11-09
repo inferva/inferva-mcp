@@ -13,10 +13,8 @@ const completion = {
   usage: { prompt_tokens: 12, completion_tokens: 5, total_tokens: 17 },
   inferva: {
     provider: "Basalt Inference",
-    priority: false,
-    tier: "No tier",
-    cost_usdc: 0.000034,
-    breakdown: { provider_cost: 0.000031, discount: 0, protocol_fee: 0.000003, to_stakers: 0.000001, to_sponsor: 0.000001, to_treasury: 0.000001 },
+    cost_usdg: 0.000034,
+    breakdown: { provider_cost: 0.000031, protocol_fee: 0.000003, to_sponsor: 0.000002, to_treasury: 0.000001 },
     capacity: "cap_1",
     epoch: 500000,
     settlement: { hash: "b".repeat(64), prev_hash: "a".repeat(64) },
@@ -61,7 +59,7 @@ describe("chat", () => {
     expect(res.json).toMatchObject({
       id: "req_abc",
       content: "Hello from INFERVA",
-      cost_usdc: 0.000034,
+      cost_usdg: 0.000034,
       breakdown: { protocol_fee: 0.000003 },
       provider: "Basalt Inference",
       receipt: `${BASE}/receipt/req_abc`,
@@ -117,14 +115,14 @@ describe("read tools", () => {
           object: "list",
           data: [
             { id: "auto", object: "model", owned_by: "inferva", description: "Routes to the cheapest active provider" },
-            { id: "basalt-70b", object: "model", owned_by: "Basalt Inference", price_per_1k_usdc: 0.0018 },
+            { id: "basalt-70b", object: "model", owned_by: "Basalt Inference", price_per_1k_usdg: 0.0018 },
           ],
         },
       },
     });
     const res = await call("list_models");
     expect(res.json.count).toBe(2);
-    expect(res.json.models[1]).toEqual({ id: "basalt-70b", provider: "Basalt Inference", price_per_1k_usdc: 0.0018 });
+    expect(res.json.models[1]).toEqual({ id: "basalt-70b", provider: "Basalt Inference", price_per_1k_usdg: 0.0018 });
   });
 
   it("get_stats converts micro units", async () => {
@@ -135,8 +133,7 @@ describe("read tools", () => {
           fees: 35,
           requests: 1,
           treasury: 21,
-          totalStaked: 5_000_000_000,
-          stakers: 2,
+          sponsorFees: 14,
           capacityTotal: 1_100_000_000,
           capacityRemaining: 1_099_999_654,
           sponsors: 2,
@@ -150,18 +147,18 @@ describe("read tools", () => {
       },
     });
     const res = await call("get_stats");
-    expect(res.json).toMatchObject({ volume_usdc: 0.000381, fees_usdc: 0.000035, staked_infer: 5000, capacity_total_usdc: 1100, active_providers: 3, epoch: { number: 10, ends_at: "2026-11-09T12:00:00.000Z" } });
-    expect(res.json.series[0]).toEqual({ epoch: 10, requests: 1, volume_usdc: 0.000381, fees_usdc: 0.000035 });
+    expect(res.json).toMatchObject({ volume_usdg: 0.000381, fees_usdg: 0.000035, treasury_usdg: 0.000021, sponsor_fees_usdg: 0.000014, capacity_total_usdg: 1100, active_providers: 3, epoch: { number: 10, ends_at: "2026-11-09T12:00:00.000Z" } });
+    expect(res.json.series[0]).toEqual({ epoch: 10, requests: 1, volume_usdg: 0.000381, fees_usdg: 0.000035 });
   });
 
   it("get_params formats values", async () => {
     const { call } = await connect({
       "GET /api/params": {
         body: {
-          params: { fee_bps: 1000, tier1_stake: 1_000_000_000, epoch_seconds: 3600, unstake_cooldown_seconds: 3600 },
+          params: { fee_bps: 1000, provider_min_bond: 5_000_000_000, epoch_seconds: 3600, provider_unbond_seconds: 86400 },
           info: {
             fee_bps: { label: "Protocol fee on provider cost", kind: "bps", governable: true },
-            tier1_stake: { label: "Tier 1 stake", kind: "amount", governable: true },
+            provider_min_bond: { label: "Minimum provider bond", kind: "amount", governable: true },
             epoch_seconds: { label: "Epoch length", kind: "seconds", governable: true },
           },
         },
@@ -170,9 +167,9 @@ describe("read tools", () => {
     const res = await call("get_params");
     const by = Object.fromEntries(res.json.params.map((p: any) => [p.name, p]));
     expect(by.fee_bps.display).toBe("10%");
-    expect(by.tier1_stake.display).toBe("1000 INFER");
+    expect(by.provider_min_bond.display).toBe("5000 INFER");
     expect(by.epoch_seconds).toMatchObject({ display: "3600s", governable: true });
-    expect(by.unstake_cooldown_seconds).toMatchObject({ kind: "seconds", governable: false });
+    expect(by.provider_unbond_seconds).toMatchObject({ kind: "seconds", governable: false });
   });
 
   it("list_requests passes limit and adds receipts", async () => {
@@ -181,7 +178,9 @@ describe("read tools", () => {
     const res = await call("list_requests", { limit: 2 });
     expect(calls[0]!.url.searchParams.get("limit")).toBe("2");
     expect(calls[0]!.url.searchParams.has("mine")).toBe(false);
-    expect(res.json.requests[0]).toMatchObject({ seq: 2, cost_usdc: (360 + 36) / 1e6, receipt: `${BASE}/receipt/req_0002`, priority: false });
+    expect(res.json.requests[0]).toMatchObject({ seq: 2, cost_usdg: (360 + 36) / 1e6, receipt: `${BASE}/receipt/req_0002`, breakdown: { to_sponsor: 28 / 1e6, to_treasury: 8 / 1e6 } });
+    expect(res.json.requests[0]).not.toHaveProperty("priority");
+    expect(res.json.requests[0].breakdown).not.toHaveProperty("to_stakers");
   });
 
   it("get_receipt verifies the record and its links", async () => {
@@ -221,18 +220,18 @@ describe("read tools", () => {
     const provider = { id: "prv_basalt", name: "Basalt Inference", operator: "genesis", website: "", status: "active", bond: 12_000_000_000, slashed: 0, weight: 100, requests: 1, tokens: 192, routable: true, created_at: 0, model_prices: [{ model: "basalt-70b", price_in: 1_800_000, price_out: 1_800_000 }] };
     const { call, calls } = await connect({
       "GET /api/providers": { body: [provider] },
-      "GET /api/providers/prv_basalt": { body: { ...provider, refunded: 0, unbond_at: null, operatorStake: null, notRoutable: null, billed: 346, successRate: null, attempts: 0, uptime: 1, epochs: [], slashes: [], events: [], recent: [] } },
+      "GET /api/providers/prv_basalt": { body: { ...provider, refunded: 0, unbond_at: null, notRoutable: null, billed: 346, successRate: null, attempts: 0, uptime: 1, epochs: [], slashes: [], events: [], recent: [] } },
       "GET /api/slashes": { body: { treasuryInfer: 0, slashes: [] } },
       "GET /api/proposals": { body: [{ id: 1, status: "open", ends_at: 1, created_at: 1, voted: null }, { id: 2, status: "passed", ends_at: 1, created_at: 1 }] },
       "GET /api/proposals/1": { body: { id: 1, status: "open", ends_at: 1, created_at: 1, votes: [], me: null } },
       "GET /api/network": { body: { capacity: 600, congested: false } },
-      "GET /api/earn/epochs": { body: { epoch: 2, epochSeconds: 3600, endsAt: 1, rows: [{ epoch: 2, starts_at: 1, ends_at: 2, requests: 0, tokens: 0, volume: 0, fees: 0, to_stakers: 0, to_sponsor: 0, to_treasury: 0 }], hasMore: false } },
-      "GET /api/earn/leaderboard": { body: { stakers: [], sponsors: [], providers: [], me: { staker: null, sponsor: null }, totalStaked: 0 } },
+      "GET /api/earn/epochs": { body: { epoch: 2, epochSeconds: 3600, endsAt: 1, rows: [{ epoch: 2, starts_at: 1, ends_at: 2, requests: 0, tokens: 0, volume: 0, fees: 0, to_sponsor: 0, to_treasury: 0 }], hasMore: false } },
+      "GET /api/earn/leaderboard": { body: { sponsors: [], providers: [], me: { sponsor: null } } },
       "GET /api/market": { body: { open: [], mine: [], sales: [] } },
-      "GET /api/agents/catalog": { body: { models: [{ id: "basalt-70b", provider_id: "prv_basalt", provider: "Basalt Inference", price_1m: 1_800_000, your_price_1m: 1_980_000, requests: 0, tokens: 0, avg_latency_ms: null, attempts: 0, success_rate: null, cheapest: true, last_used: null }], tier: { name: "No tier", discountBps: 0 }, fee_bps: 1000, limits: { maxMessages: 20 }, window_days: 30 } },
+      "GET /api/agents/catalog": { body: { models: [{ id: "basalt-70b", provider_id: "prv_basalt", provider: "Basalt Inference", price_1m: 1_800_000, your_price_1m: 1_980_000, requests: 0, tokens: 0, avg_latency_ms: null, attempts: 0, success_rate: null, cheapest: true, last_used: null }], fee_bps: 1000, limits: { maxMessages: 20 }, window_days: 30 } },
     });
-    expect((await call("list_providers")).json.providers[0]).toMatchObject({ bond_infer: 12000, models: [{ model: "basalt-70b", input_usdc_per_1m: 1.8 }] });
-    expect((await call("get_provider", { id: "prv_basalt" })).json).toMatchObject({ billed_usdc: 0.000346, uptime: 1 });
+    expect((await call("list_providers")).json.providers[0]).toMatchObject({ bond_infer: 12000, models: [{ model: "basalt-70b", input_usdg_per_1m: 1.8 }] });
+    expect((await call("get_provider", { id: "prv_basalt" })).json).toMatchObject({ billed_usdg: 0.000346, uptime: 1 });
     expect((await call("list_slashes")).json).toMatchObject({ treasury_infer: 0, count: 0 });
     const props = (await call("list_proposals", { status: "open" })).json;
     expect(props.count).toBe(1);
@@ -242,7 +241,7 @@ describe("read tools", () => {
     expect((await call("list_epochs", { limit: 5 })).json.epochs).toHaveLength(1);
     expect((await call("get_leaderboard")).json).not.toHaveProperty("me");
     expect((await call("get_capacity_market")).json).not.toHaveProperty("mine");
-    expect((await call("get_model_catalog")).json.models[0]).toMatchObject({ list_usdc_per_1m: 1.8, all_in_usdc_per_1m: 1.98, auto_routes_here: true });
+    expect((await call("get_model_catalog")).json.models[0]).toMatchObject({ list_usdg_per_1m: 1.8, all_in_usdg_per_1m: 1.98, auto_routes_here: true });
     expect(calls.find((c) => c.url.pathname === "/api/earn/epochs")!.url.searchParams.get("limit")).toBe("5");
     // Read tools never send a key.
     for (const c of calls) expect(c.headers.authorization).toBeUndefined();

@@ -4,7 +4,7 @@ Model Context Protocol (MCP) server for [INFERVA](https://inferva.xyz). It lets 
 
 ## What is INFERVA
 
-INFERVA is one inference endpoint that AI agents pay through. Agents send standard chat-completion requests to a single URL. Each request is routed to a provider, metered, paid in USDC and written to a hash-chained settlement log. A protocol fee on every request goes to **$INFER stakers** and to the **capacity sponsors** whose prepaid capacity served it, with the rest going to the treasury. Rewards come only from fees agents actually paid. INFERVA is launching on **Elysium**.
+INFERVA is one inference endpoint that AI agents pay through. Agents send standard chat-completion requests to a single URL. Each request is routed to a provider, metered, paid in USDG and written to a hash-chained settlement log. A protocol fee on every request is split between the **capacity sponsor** whose prepaid capacity served it and the **treasury**, which takes the rest. Sponsor earnings come only from fees agents actually paid. INFERVA is launching on **Robinhood Chain**.
 
 - Website: https://inferva.xyz
 - Docs: https://docs.inferva.xyz
@@ -13,29 +13,29 @@ INFERVA is one inference endpoint that AI agents pay through. Agents send standa
 
 ## Tools
 
-`chat` is the only tool that spends money: it charges the agent key owner's USDC balance. Every other tool is a free public read and needs no key.
+`chat` is the only tool that spends money: it charges the agent key owner's USDG balance. Every other tool is a free public read and needs no key.
 
 | Tool | What it does | INFERVA route |
 |---|---|---|
-| `chat` | Paid chat completion. Returns the reply, `cost_usdc`, the fee `breakdown` (provider cost, stake discount, protocol fee and its split to stakers, sponsor and treasury), the settlement hash and a public receipt URL. Needs `INFERVA_API_KEY`. | `POST /v1/chat/completions` |
+| `chat` | Paid chat completion. Returns the reply, `cost_usdg`, the fee `breakdown` (provider cost, protocol fee and its split between the capacity sponsor and the treasury), the settlement hash and a public receipt URL. Needs `INFERVA_API_KEY`. | `POST /v1/chat/completions` |
 | `list_models` | Models served by active providers, with list price per 1k tokens. `auto` routes to the cheapest provider. | `GET /v1/models` |
 | `get_model_catalog` | Per model: list and all-in price per 1M tokens, usage, latency, success rate, and the endpoint limits. | `GET /api/agents/catalog` |
-| `get_stats` | Requests, volume, fees, treasury, INFER staked, sponsored capacity, providers, current epoch and a 24-epoch series. | `GET /api/stats` |
+| `get_stats` | Requests, volume, fees, the treasury and sponsor fee shares, sponsored capacity, providers, current epoch and a 24-epoch series. | `GET /api/stats` |
 | `get_params` | Live protocol parameters with readable values and whether governance can change them. | `GET /api/params` |
 | `list_requests` | Most recent settled requests with cost, fee split, hashes and receipt URLs. | `GET /api/requests` |
 | `get_receipt` | One request's receipt, with its hash and links re-checked locally. | `GET /api/receipts/:id` |
 | `verify_settlement_chain` | Downloads the whole settlement log from the genesis value and recomputes every SHA-256 hash locally. Reports records checked and the first broken record, if any. | `GET /api/chain` (paged) |
 | `list_providers` | Providers: status, routability, routing weight, INFER bond, slashed amount, usage and per-model prices. | `GET /api/providers` |
-| `get_provider` | One provider in detail: billed USDC, success rate, uptime, slashes, events, recent requests. | `GET /api/providers/:id` |
+| `get_provider` | One provider in detail: billed USDG, success rate, uptime, slashes, events, recent requests. | `GET /api/providers/:id` |
 | `list_slashes` | Executed slashes and the INFER the treasury holds from them. | `GET /api/slashes` |
-| `list_proposals` | Governance proposals (parameter, slash, routing weight) with stake-weighted votes. | `GET /api/proposals` |
+| `list_proposals` | Governance proposals (parameter, slash, routing weight) with votes weighted by INFER held. | `GET /api/proposals` |
 | `get_proposal` | One proposal with every vote. | `GET /api/proposals/:id` |
-| `get_network` | Live gateway load, congestion state and the admission ceiling per stake tier. | `GET /api/network` |
-| `list_epochs` | Fee epochs with volume, fees and the staker / sponsor / treasury split. | `GET /api/earn/epochs` |
-| `get_leaderboard` | Top stakers, capacity sponsors and providers. | `GET /api/earn/leaderboard` |
+| `get_network` | Live gateway load and congestion state (one lane for every caller). | `GET /api/network` |
+| `list_epochs` | Fee epochs with volume, fees and the sponsor / treasury split. | `GET /api/earn/epochs` |
+| `get_leaderboard` | Top capacity sponsors and providers. | `GET /api/earn/leaderboard` |
 | `get_capacity_market` | Open listings of sponsored capacity positions and recent sales. | `GET /api/market` |
 
-Where a tool converts amounts it names the unit (`_usdc`, `_infer`). Where it passes the API's data through, it says so in a `units` field: amounts there are integers in micro units (1 USDC or 1 INFER = 1,000,000).
+Where a tool converts amounts it names the unit (`_usdg`, `_infer`). Where it passes the API's data through, it says so in a `units` field: amounts there are integers in micro units (1 USDG or 1 INFER = 1,000,000).
 
 ### How chain verification works
 
@@ -45,7 +45,7 @@ Every settlement record stores the hash of the record before it. A record's hash
 sha256(prev_hash | id | payer | provider | model | tokens | base | discount | fee | capacity_id | epoch | created_at)
 ```
 
-with the fields joined by `|` and the first record chained to the published genesis value. `verify_settlement_chain` rebuilds every hash from the record contents and never trusts the stored hash column, so an edited, dropped or reordered record shows up as the first broken record.
+with the fields joined by `|` and the first record chained to the published genesis value. `discount` is 0 on current records; it stays in the hash so older records still verify. `verify_settlement_chain` rebuilds every hash from the record contents and never trusts the stored hash column, so an edited, dropped or reordered record shows up as the first broken record.
 
 ## Setup
 
